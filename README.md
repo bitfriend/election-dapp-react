@@ -1,3 +1,33 @@
+# Compilation of Solidity
+
+This project uses truffle to compile solidity.
+
+## Install windows-build-tools
+
+Suppose Visual Studio 2017 is installed on Windows 10.
+`npm install -g windows-build-tools@3.1.0`
+npm is preferred than yarn, because `yarn global add` doesn't fetch package into `%AppData%\npm\node_modules` (`C:\Users\XXX\AppData\Roaming\npm\node_modules`)
+Currently latest version has error on installing.
+
+## Install truffle
+
+`npm install -g truffle`
+npm is preferred than yarn, because `yarn global add` doesn't fetch package into `%AppData%\npm\node_modules` (`C:\Users\XXX\AppData\Roaming\npm\node_modules`)
+
+## Configurate truffle in this project
+
+In `truffle-config.js`, the option `contracts_build_directory` should be set to `src/contracts` for example.
+
+## Write solidity
+
+Solidity files should be made in `/contracts` directory.
+
+## Compile solidity
+
+`truffle compile`
+
+The compiled JSON files will be created in `src/contracts`.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
