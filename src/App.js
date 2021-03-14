@@ -1,10 +1,13 @@
 import React, { PureComponent } from 'react';
-import { Button, Select, Space, Table, Typography } from 'antd';
+import { Button, Radio, Space, Spin, Table, Typography } from 'antd';
+import { cloneDeep } from 'lodash/fp';
 import 'antd/dist/antd.css';
 import './App.css';
 
+import Web3 from 'web3';
+import Election from './contracts/Election.json';
+
 const { Title } = Typography;
-const { Option } = Select;
 
 const columns = [{
   title: '#',
@@ -16,47 +19,195 @@ const columns = [{
   key: 'name'
 },{
   title: 'Votes',
-  dataIndex: 'votes',
-  key: 'votes'
-}];
-
-const data = [{
-  id: 1,
-  name: 'Candidate 1',
-  votes: 3
-},{
-  id: 2,
-  name: 'Candidate 1',
-  votes: 5
+  dataIndex: 'voteCount',
+  key: 'voteCount'
 }];
 
 class App extends PureComponent {
   state = {
-    activeId: 1
+    account: '0x0',
+    hasVoted: false,
+    candidates: [],
+    activeId: 0,
+    loading: false
   }
 
-  onChangeCandidate = (value) => this.setState({ activeId: value })
+  componentDidMount = async () => {
+    this.setState({ loading: true });
+    try {
+      // Get network provider and web3 instance.
+      const web3 = await this.getWeb3();
+      this.web3 = web3;
+
+      // Use web3 to get the user's accounts.
+      const accounts = await web3.eth.getAccounts();
+
+      // Get the contract instance.
+      const networkId = await web3.eth.net.getId();
+      const deployedNetwork = Election.networks[networkId];
+      this.contract = new web3.eth.Contract(Election.abi, deployedNetwork && deployedNetwork.address);
+
+      // Install event watch
+      this.watchEvents();
+
+      // Get candidate list
+      let candidatesCount = await this.contract.methods.candidatesCount().call();
+      candidatesCount = parseInt(candidatesCount, 10);
+      const candidates = [];
+      for (let i = 1; i <= candidatesCount; i++) {
+        const candidate = await this.contract.methods.candidates(i).call();
+        candidates.push({
+          id: candidate.id,
+          name: candidate.name,
+          voteCount: parseInt(candidate.voteCount, 10)
+        });
+      }
+
+      // Check whether you already have voted
+      const hasVoted = await this.contract.methods.voters(accounts[0]).call();
+
+      // Set web3, accounts, and contract to the state, and then proceed with an
+      // example of interacting with the contract's methods.
+      this.setState({
+        loading: false,
+        account: accounts[0],
+        candidates,
+        hasVoted
+      });
+    } catch (error) {
+      this.setState({ loading: false }, () => {
+        // Catch any errors for any of the above operations.
+        alert(
+          `Failed to load web3, accounts, or contract. Check console for details.`,
+        );
+        console.error(error);
+      });
+    }
+  }
+
+  getWeb3 = () => new Promise((resolve, reject) => {
+    // Wait for loading completion to avoid race conditions with web3 injection timing.
+    window.addEventListener('load', () => {
+      // Modern dapp browsers...
+      if (window.ethereum) {
+        const web3 = new Web3(window.ethereum);
+        try {
+          // Request account access if needed
+          window.ethereum.enable().then(data => {
+            // Acccounts now exposed
+            resolve(web3);
+          });
+        } catch (error) {
+          reject(error);
+        }
+      }
+      // Legacy dapp browsers...
+      else if (window.web3) {
+        // Use Mist/MetaMask's provider.
+        const web3 = window.web3;
+        console.log("Injected web3 detected.");
+        resolve(web3);
+      }
+      // Fallback to localhost; use dev console port by default...
+      else {
+        const provider = new Web3.providers.HttpProvider('http://127.0.0.1:7545');
+        const web3 = new Web3(provider);
+        console.log('No web3 instance injected, using Local web3.');
+        resolve(web3);
+      }
+    });
+  })
+
+  watchEvents() {
+    this.contract.events.votedEvent({
+      fromBlock: 0,
+      toBlock: 'latest'
+    }, (error, event) => {
+      console.log('votedEvent', event);
+      if (!error) {
+        const candidates = cloneDeep(this.state.candidates);
+        for (let i = 0; i < candidates.length; i++) {
+          if (candidates[i].id === event.returnValues._candidateId) {
+            candidates[i].voteCount++;
+            break;
+          }
+        }
+        this.setState({ candidates });
+      }
+    }).on('data', event => {
+      console.log('votedEvent data', event);
+    }).on('error', console.error);
+  }
+
+  onChangeCandidate = (e) => {
+    this.setState({ activeId: e.target.value });
+  }
+
+  onCastVote = () => {
+    this.setState({ loading: true });
+    const gasPrice = this.web3.utils.toWei('0', 'gwei');
+    this.contract.methods.vote(this.state.activeId).send({
+      gas: 0,
+      gasPrice,
+      from: this.state.account
+    }).on('transactionHash', (hash) => {
+      console.log('Hash');
+    }).on('receipt', (receipt) => {
+      console.log('Receipt');
+    }).on('confirmation', (confirmationNumber, receipt) => {
+      console.log('Confirmed');
+    }).on('error', console.error).then(result => {
+      this.setState({
+        loading: false,
+        hasVoted: true
+      });
+    }).catch(error => {
+      console.log(error);
+    });
+  }
 
   render = () => (
     <div className="App">
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <Title level={2}>Election Results</Title>
-        <Table columns={columns} dataSource={data} rowKey="id" />
-        <Space size="large">
-          <Select
-            defaultValue={1}
-            value={this.state.activeId}
-            onChange={this.onChangeCandidate}
-            style={{
-              width: 200
-            }}
-          >
-            <Option value={1}>Candidate 1</Option>
-            <Option value={2}>Candidate 2</Option>
-          </Select>
-          <Button type="primary" size="large">Vote</Button>
-        </Space>
+        <Title level={3}>Election Results</Title>
+        <Title level={5}>Your Account: {this.state.account}</Title>
+        <Table columns={columns} dataSource={this.state.candidates} rowKey="id" />
+        {this.state.hasVoted ? (
+          <Title level={5}>Already you have voted</Title>
+        ) : (
+          <Space size="large">
+            <Radio.Group value={this.state.activeId} onChange={this.onChangeCandidate}>
+              {this.state.candidates.map((candidate, index) => (
+                <Radio
+                  key={index}
+                  value={candidate.id}
+                >{candidate.name}</Radio>
+              ))}
+            </Radio.Group>
+            <Button
+              type="primary"
+              size="large"
+              onClick={this.onCastVote}
+              disabled={this.state.activeId === 0}
+            >Vote</Button>
+          </Space>
+        )}
       </Space>
+      {this.state.loading && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <Spin />
+        </div>
+      )}
     </div>
   )
 }

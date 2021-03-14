@@ -1,4 +1,4 @@
-pragma solidity 0.5.16;
+pragma solidity ^0.5.16;
 
 contract Election {
   // Model a candidate
@@ -12,7 +12,7 @@ contract Election {
   mapping(address => bool) public voters;
 
   // Store candidates
-  mapping(address => Candidate) public candidates;
+  mapping(uint => Candidate) public candidates;
 
   // Store the count of candidates
   uint public candidatesCount;
@@ -27,7 +27,7 @@ contract Election {
 
   function addCondidate(string memory _name) private {
     candidatesCount++;
-    candidates[address(candidatesCount)] = Candidate(candidatesCount, _name, 0);
+    candidates[candidatesCount] = Candidate(candidatesCount, _name, 0);
   }
 
   function vote(uint _candidateId) public {
@@ -41,7 +41,7 @@ contract Election {
     voters[msg.sender] = true;
 
     // update candidate vote count
-    candidates[address(_candidateId)].voteCount++;
+    candidates[_candidateId].voteCount++;
 
     // trigger voted event
     emit votedEvent(_candidateId);

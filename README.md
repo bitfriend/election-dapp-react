@@ -28,6 +28,16 @@ Solidity files should be made in `/contracts` directory.
 
 The compiled JSON files will be created in `src/contracts`.
 
+## Import test accounts from ganache into Metamask
+
+Import test account using its private key.
+
+This account has 100 ETH by default.
+
+When lack of ether, all smart contract methods will not be performed.
+
+This webapp should run by this account.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
