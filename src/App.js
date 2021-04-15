@@ -1,11 +1,12 @@
 import React, { PureComponent } from 'react';
-import { Button, Radio, Space, Spin, Table, Typography } from 'antd';
+import { Alert, Button, Radio, Space, Spin, Table, Typography } from 'antd';
 import { cloneDeep } from 'lodash/fp';
 import 'antd/dist/antd.css';
 import './App.css';
 
 import Web3 from 'web3';
 import Election from './contracts/Election.json';
+import networks from './truffle-networks';
 
 const { Title } = Typography;
 
@@ -29,10 +30,13 @@ class App extends PureComponent {
     hasVoted: false,
     candidates: [],
     activeId: 0,
-    loading: false
+    loading: false,
+    hasError: false,
+    errorMessage: '',
+    errorDescription: ''
   }
 
-  componentDidMount = async () => {
+  async componentDidMount() {
     this.setState({ loading: true });
     try {
       // Get network provider and web3 instance.
@@ -43,7 +47,18 @@ class App extends PureComponent {
       const accounts = await web3.eth.getAccounts();
 
       // Get the contract instance.
+      const targetNetId = networks[process.env.REACT_APP_NETWORK_NAME].network_id;
       const networkId = await web3.eth.net.getId();
+      if (targetNetId !== '*' && networkId !== targetNetId) {
+        const networkType = await web3.eth.net.getNetworkType();
+        this.setState({
+          loading: false,
+          hasError: true,
+          errorMessage: 'Error in Ethereum Network Type',
+          errorDescription: `Current account is of ${networkType} network. Please select account for ${process.env.REACT_APP_NETWORK_NAME} network.`
+        });
+        return;
+      }
       const deployedNetwork = Election.networks[networkId];
       this.contract = new web3.eth.Contract(Election.abi, deployedNetwork && deployedNetwork.address);
 
@@ -110,13 +125,19 @@ class App extends PureComponent {
       }
       // Fallback to localhost; use dev console port by default...
       else {
-        const provider = new Web3.providers.HttpProvider('http://127.0.0.1:7545');
-        const web3 = new Web3(provider);
+        const web3 = new Web3(this.getProvider());
         console.log('No web3 instance injected, using Local web3.');
         resolve(web3);
       }
     });
   })
+
+  getProvider() {
+    if (process.env.REACT_APP_NETWORK_NAME === 'development') {
+      return new Web3.providers.HttpProvider(`http://${networks.development.host}:${networks.development.port}`);
+    }
+    return networks[process.env.REACT_APP_NETWORK_NAME].provider();
+  }
 
   watchEvents() {
     this.contract.events.votedEvent({
@@ -145,9 +166,11 @@ class App extends PureComponent {
 
   onCastVote = () => {
     this.setState({ loading: true });
-    const gasPrice = this.web3.utils.toWei('0', 'gwei');
+    // if gas and gasPrice is insufficient, "vote" method may be failed
+    // 20 gwei and 210000 are experienced values, not formally calculated values.
+    const gasPrice = this.web3.utils.toWei('20', 'gwei');
     this.contract.methods.vote(this.state.activeId).send({
-      gas: 0,
+      gas: 210000,
       gasPrice,
       from: this.state.account
     }).on('transactionHash', (hash) => {
@@ -162,6 +185,7 @@ class App extends PureComponent {
         hasVoted: true
       });
     }).catch(error => {
+      this.setState({ loading: false });
       console.log(error);
     });
   }
@@ -169,6 +193,15 @@ class App extends PureComponent {
   render = () => (
     <div className="App">
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {this.state.hasError && (
+          <Alert
+            type="warning"
+            message={this.state.errorMessage}
+            description={this.state.errorDescription}
+            closable
+            onClose={() => this.setState({ hasError: false })}
+          />
+        )}
         <Title level={3}>Election Results</Title>
         <Title level={5}>Your Account: {this.state.account}</Title>
         <Table columns={columns} dataSource={this.state.candidates} rowKey="id" />
@@ -194,17 +227,7 @@ class App extends PureComponent {
         )}
       </Space>
       {this.state.loading && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
+        <div className="spin-container">
           <Spin />
         </div>
       )}

@@ -21,8 +21,8 @@ contract Election {
   event votedEvent(uint indexed _candidateId);
 
   constructor() public {
-    addCondidate('Candidate 1');
-    addCondidate('Candidate 2');
+    addCondidate('Gold');
+    addCondidate('Silver');
   }
 
   function addCondidate(string memory _name) private {
