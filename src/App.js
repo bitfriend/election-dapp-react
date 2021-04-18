@@ -5,7 +5,7 @@ import 'antd/dist/antd.css';
 import './App.css';
 
 import Web3 from 'web3';
-import Election from './contracts/Election.json';
+import Election from './abis/Election.json';
 import networks from './truffle-networks';
 
 const { Title } = Typography;
@@ -40,30 +40,32 @@ class App extends PureComponent {
     this.setState({ loading: true });
     try {
       // Get network provider and web3 instance.
-      const web3 = await this.getWeb3();
-      this.web3 = web3;
+      this.web3 = await this.getWeb3();
 
       // Use web3 to get the user's accounts.
-      const accounts = await web3.eth.getAccounts();
+      const accounts = await this.web3.eth.getAccounts();
 
       // Get the contract instance.
-      const targetNetId = networks[process.env.REACT_APP_NETWORK_NAME].network_id;
-      const networkId = await web3.eth.net.getId();
-      if (targetNetId !== '*' && networkId !== targetNetId) {
-        const networkType = await web3.eth.net.getNetworkType();
-        this.setState({
-          loading: false,
-          hasError: true,
-          errorMessage: 'Error in Ethereum Network Type',
-          errorDescription: `Current account is of ${networkType} network. Please select account for ${process.env.REACT_APP_NETWORK_NAME} network.`
-        });
-        return;
+      const envNetworkType = process.env.REACT_APP_NETWORK_TYPE;
+      const networkType = await this.web3.eth.net.getNetworkType();
+      if (networkType !== envNetworkType) {
+        if (!(envNetworkType === 'development' && networkType === 'private')) {
+          this.setState({
+            loading: false,
+            hasError: true,
+            errorMessage: 'Error in Ethereum Network Type',
+            errorDescription: `Current account is of ${networkType} network. Please select account for ${process.env.REACT_APP_NETWORK_TYPE} network.`
+          });
+          return;
+        }
       }
+      const networkId = await this.web3.eth.net.getId();
       const deployedNetwork = Election.networks[networkId];
-      this.contract = new web3.eth.Contract(Election.abi, deployedNetwork && deployedNetwork.address);
+      this.contract = new this.web3.eth.Contract(Election.abi, deployedNetwork && deployedNetwork.address);
 
       // Install event watch
-      this.watchEvents();
+      const fromBlock = await this.web3.eth.getBlockNumber();
+      this.watchEvents(fromBlock);
 
       // Get candidate list
       let candidatesCount = await this.contract.methods.candidatesCount().call();
@@ -133,22 +135,22 @@ class App extends PureComponent {
   })
 
   getProvider() {
-    if (process.env.REACT_APP_NETWORK_NAME === 'development') {
+    if (process.env.REACT_APP_NETWORK_TYPE === 'development') {
       return new Web3.providers.HttpProvider(`http://${networks.development.host}:${networks.development.port}`);
     }
-    return networks[process.env.REACT_APP_NETWORK_NAME].provider();
+    return networks[process.env.REACT_APP_NETWORK_TYPE].provider();
   }
 
-  watchEvents() {
+  watchEvents(fromBlock) {
     this.contract.events.votedEvent({
-      fromBlock: 0,
+      fromBlock,
       toBlock: 'latest'
     }, (error, event) => {
       console.log('votedEvent', event);
       if (!error) {
         const candidates = cloneDeep(this.state.candidates);
         for (let i = 0; i < candidates.length; i++) {
-          if (candidates[i].id === event.returnValues._candidateId) {
+          if (candidates[i].id === event.returnValues[0]) {
             candidates[i].voteCount++;
             break;
           }

@@ -1,3 +1,4 @@
+require('dotenv').config(); // To use process.env variable
 const HDWalletProvider = require('@truffle/hdwallet-provider');
 const MNEMONIC = process.env.REACT_APP_MNEMONIC;
 const ROPSTEN_URL = `https://ropsten.infura.io/v3/${process.env.REACT_APP_INFURA_PROJECT_ID}`;
