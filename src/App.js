@@ -169,10 +169,13 @@ class App extends PureComponent {
   onCastVote = () => {
     this.setState({ loading: true });
     // if gas and gasPrice is insufficient, "vote" method may be failed
-    // 20 gwei and 210000 are experienced values, not formally calculated values.
+    const tx = this.contract.methods.vote(this.state.activeId);
+    const gas = await tx.estimateGas({
+      from: this.state.account
+    });
     const gasPrice = this.web3.utils.toWei('20', 'gwei');
-    this.contract.methods.vote(this.state.activeId).send({
-      gas: 210000,
+    tx.send({
+      gas,
       gasPrice,
       from: this.state.account
     }).on('transactionHash', (hash) => {
