@@ -46,15 +46,15 @@ class App extends PureComponent {
       const accounts = await this.web3.eth.getAccounts();
 
       // Get the contract instance.
-      const envNetworkType = process.env.REACT_APP_NETWORK_TYPE;
+      const networkName = process.env.REACT_APP_NETWORK_NAME;
       const networkType = await this.web3.eth.net.getNetworkType();
-      if (networkType !== envNetworkType) {
-        if (!(envNetworkType === 'development' && networkType === 'private')) {
+      if (networkType !== networkName) {
+        if (!(networkName === 'development' && networkType === 'private')) {
           this.setState({
             loading: false,
             hasError: true,
             errorMessage: 'Error in Ethereum Network Type',
-            errorDescription: `Current account is of ${networkType} network. Please select account for ${process.env.REACT_APP_NETWORK_TYPE} network.`
+            errorDescription: `Current account is of ${networkType} network. Please select account for ${process.env.REACT_APP_NETWORK_NAME} network.`
           });
           return;
         }
@@ -135,10 +135,10 @@ class App extends PureComponent {
   })
 
   getProvider() {
-    if (process.env.REACT_APP_NETWORK_TYPE === 'development') {
+    if (process.env.REACT_APP_NETWORK_NAME === 'development') {
       return new Web3.providers.HttpProvider(`http://${networks.development.host}:${networks.development.port}`);
     }
-    return networks[process.env.REACT_APP_NETWORK_TYPE].provider();
+    return networks[process.env.REACT_APP_NETWORK_NAME].provider();
   }
 
   watchEvents(fromBlock) {
