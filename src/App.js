@@ -166,14 +166,14 @@ class App extends PureComponent {
     this.setState({ activeId: e.target.value });
   }
 
-  onCastVote = () => {
+  onCastVote = async () => {
     this.setState({ loading: true });
     // if gas and gasPrice is insufficient, "vote" method may be failed
     const tx = this.contract.methods.vote(this.state.activeId);
     const gas = await tx.estimateGas({
       from: this.state.account
     });
-    const gasPrice = this.web3.utils.toWei('20', 'gwei');
+    const gasPrice = await this.web3.eth.getGasPrice();
     tx.send({
       gas,
       gasPrice,
